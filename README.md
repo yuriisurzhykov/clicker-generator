@@ -1,5 +1,4 @@
-# 🎈 Blank app template
-
+# 🎈 Click Sound Generator 🎛️
 A simple Streamlit app that provides you ability to play with sound configurations to generate the best click sound!
 The app contains lots of different parameters you can modify to find your best click sound.
 
