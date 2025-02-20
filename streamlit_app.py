@@ -220,16 +220,22 @@ bitcrusher, reverb, and filter settings to craft the perfect click for your app.
 # --- PRESETS: EXPORT/IMPORT SETTINGS ---
 st.sidebar.header("💾 Presets")
 
-# Import settings
+# Инициализируем состояние для импортированных настроек, если еще нет
+if "imported_settings" not in st.session_state:
+    st.session_state["imported_settings"] = None
+
 preset_file = st.sidebar.file_uploader("Import Settings (JSON)", type=["json"])
 if preset_file is not None:
     try:
-        imported_settings = json.load(preset_file)
+        st.session_state["imported_settings"] = json.load(preset_file)
         st.sidebar.success("Settings imported successfully! ✅")
     except Exception as e:
         st.sidebar.error(f"Error importing settings: {e}")
-else:
-    imported_settings = None
+
+if st.sidebar.button("Clear Imported Preset"):
+    st.session_state["imported_settings"] = None
+
+imported_settings = st.session_state["imported_settings"]
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("1. Basic Parameters")
@@ -274,8 +280,8 @@ else:
 
 st.sidebar.header("6. Filter")
 filter_enabled = st.sidebar.checkbox("Enable Filter", DEFAULTS["filter_enabled"])
+filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
 if filter_enabled:
-    filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
     if filter_type == "bandpass":
         filter_cutoff_low = st.sidebar.slider("Filter Low (Hz)", 50, 5000, DEFAULTS["filter_cutoff_low"], 50)
         filter_cutoff_high = st.sidebar.slider("Filter High (Hz)", 100, 10000, DEFAULTS["filter_cutoff_high"], 50)
@@ -285,7 +291,6 @@ if filter_enabled:
         filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
         filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
 else:
-    filter_type = DEFAULTS["filter_type"]
     filter_cutoff_single = DEFAULTS["filter_cutoff_single"]
     filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
     filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
@@ -322,7 +327,7 @@ current_params = {
     "filter_cutoff_single": filter_cutoff_single,
 }
 
-# If settings were imported, override current parameters
+# If imported settings exist, override current_params
 if imported_settings is not None:
     current_params = imported_settings
     st.sidebar.success("Imported settings applied!")
