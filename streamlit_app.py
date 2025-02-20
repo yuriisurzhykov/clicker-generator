@@ -274,8 +274,8 @@ else:
 
 st.sidebar.header("6. Filter")
 filter_enabled = st.sidebar.checkbox("Enable Filter", DEFAULTS["filter_enabled"])
-filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
 if filter_enabled:
+    filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
     if filter_type == "bandpass":
         filter_cutoff_low = st.sidebar.slider("Filter Low (Hz)", 50, 5000, DEFAULTS["filter_cutoff_low"], 50)
         filter_cutoff_high = st.sidebar.slider("Filter High (Hz)", 100, 10000, DEFAULTS["filter_cutoff_high"], 50)
@@ -285,6 +285,7 @@ if filter_enabled:
         filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
         filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
 else:
+    filter_type = DEFAULTS["filter_type"]
     filter_cutoff_single = DEFAULTS["filter_cutoff_single"]
     filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
     filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
