@@ -4,6 +4,7 @@ import soundfile as sf
 import plotly.graph_objects as go
 from io import BytesIO
 from scipy.signal import butter, lfilter, sawtooth
+import json
 
 SAMPLE_RATE = 44100
 
@@ -218,22 +219,17 @@ bitcrusher, reverb, and filter settings to craft the perfect click for your app.
 
 # --- PRESETS: EXPORT/IMPORT SETTINGS ---
 st.sidebar.header("💾 Presets")
-preset_json = st.sidebar.file_uploader("Import Settings (JSON)", type=["json"])
-if preset_json is not None:
+
+# Import settings
+preset_file = st.sidebar.file_uploader("Import Settings (JSON)", type=["json"])
+if preset_file is not None:
     try:
-        imported_settings = st.cache_data(lambda: __import__('json').load(preset_json))()
-        st.success("Settings imported successfully! ✅")
+        imported_settings = json.load(preset_file)
+        st.sidebar.success("Settings imported successfully! ✅")
     except Exception as e:
-        st.error(f"Error importing settings: {e}")
+        st.sidebar.error(f"Error importing settings: {e}")
 else:
     imported_settings = None
-
-# Button to export current settings (we'll generate JSON from DEFAULTS merged with current controls)
-def export_settings(settings):
-    return st.sidebar.download_button("Export Settings (JSON) 📥",
-                                        data=settings,
-                                        file_name="click_settings.json",
-                                        mime="application/json")
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("1. Basic Parameters")
@@ -278,8 +274,8 @@ else:
 
 st.sidebar.header("6. Filter")
 filter_enabled = st.sidebar.checkbox("Enable Filter", DEFAULTS["filter_enabled"])
+filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
 if filter_enabled:
-    filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
     if filter_type == "bandpass":
         filter_cutoff_low = st.sidebar.slider("Filter Low (Hz)", 50, 5000, DEFAULTS["filter_cutoff_low"], 50)
         filter_cutoff_high = st.sidebar.slider("Filter High (Hz)", 100, 10000, DEFAULTS["filter_cutoff_high"], 50)
@@ -289,12 +285,11 @@ if filter_enabled:
         filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
         filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
 else:
-    filter_type = DEFAULTS["filter_type"]
     filter_cutoff_single = DEFAULTS["filter_cutoff_single"]
     filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
     filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
 
-# Assemble parameters from controls
+# Assemble current parameters from controls
 current_params = {
     "duration_ms": duration_ms,
     "waveform": waveform,
@@ -326,15 +321,16 @@ current_params = {
     "filter_cutoff_single": filter_cutoff_single,
 }
 
-# If settings imported, override current_params
+# If settings were imported, override current parameters
 if imported_settings is not None:
     current_params = imported_settings
     st.sidebar.success("Imported settings applied!")
 
-# Export current settings as JSON
-export_settings(  # This will create a download button in the sidebar
-    __import__("json").dumps(current_params, indent=4)
-)
+# Export current settings as JSON (download button)
+st.sidebar.download_button("Export Settings (JSON) 📥",
+                           data=json.dumps(current_params, indent=4),
+                           file_name="click_settings.json",
+                           mime="application/json")
 
 # --- SOUND SYNTHESIS ---
 signal, t = synthesize_click_sound(current_params)
