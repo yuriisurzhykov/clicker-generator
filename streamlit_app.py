@@ -3,8 +3,8 @@ import numpy as np
 import soundfile as sf
 import plotly.graph_objects as go
 from io import BytesIO
-from scipy.signal import butter, lfilter, sawtooth
 import json
+from scipy.signal import butter, lfilter, sawtooth
 
 SAMPLE_RATE = 44100
 
@@ -17,27 +17,22 @@ DEFAULTS = {
     "overtone_enabled": True,   # Enable overtone
     "overtone_freq": 3000,      # Overtone frequency in Hz
     "overtone_amp": 0.2,        # Overtone amplitude (0..1)
-
     # ADSR envelope (in ms, sustain is a level 0..1)
     "attack_ms": 1,
     "decay_ms": 5,
     "sustain_level": 0.5,
     "release_ms": 5,
-
     # Mechanical resonance (exponential decay factor)
     "mechanical_decay": 0.02,
     # Noise amplitude
     "noise_amp": 0.002,
-
     # Bitcrusher effect
     "bitcrusher_enabled": False,
     "bit_depth": 8,
-
     # Reverb effect
     "reverb_enabled": False,
     "reverb_decay": 0.2,   # seconds
     "reverb_mix": 0.3,     # 0..1
-
     # Filter effect
     "filter_enabled": False,
     "filter_type": "lowpass",     # Options: "lowpass", "highpass", "bandpass"
@@ -62,10 +57,6 @@ def generate_waveform(waveform, freq, amp, t):
         return amp * np.sin(2 * np.pi * freq * t)  # fallback to sine
 
 def apply_adsr(signal, attack_ms, decay_ms, sustain_level, release_ms, fs):
-    """
-    Applies an ADSR envelope to the signal.
-    All times are in milliseconds.
-    """
     length = len(signal)
     env = np.ones(length, dtype=np.float32)
     a = int(fs * (attack_ms / 1000.0))
@@ -110,7 +101,6 @@ def apply_reverb(signal, fs, decay_time, mix):
     return (1 - mix) * signal + mix * wet
 
 def apply_filter(signal, fs, ftype, cutoff_low, cutoff_high, cutoff_single):
-    from scipy.signal import butter, lfilter
     nyq = 0.5 * fs
     if ftype == "bandpass":
         if cutoff_low >= cutoff_high:
@@ -217,110 +207,164 @@ Customize the waveform, frequency, overtone, ADSR envelope, mechanical resonance
 bitcrusher, reverb, and filter settings to craft the perfect click for your app. ✨
 """)
 
+# Инициализация состояния с параметрами по умолчанию
+if "params" not in st.session_state:
+    st.session_state.params = DEFAULTS.copy()
+
 # --- PRESETS: EXPORT/IMPORT SETTINGS ---
 st.sidebar.header("💾 Presets")
-
-# Инициализируем состояние для импортированных настроек, если еще нет
-if "imported_settings" not in st.session_state:
-    st.session_state["imported_settings"] = None
 
 preset_file = st.sidebar.file_uploader("Import Settings (JSON)", type=["json"])
 if preset_file is not None:
     try:
-        st.session_state["imported_settings"] = json.load(preset_file)
+        imported_settings = json.load(preset_file)
+        st.session_state.params.update(imported_settings)
         st.sidebar.success("Settings imported successfully! ✅")
+        st.experimental_rerun()  # Перерисовка приложения для обновления виджетов
     except Exception as e:
         st.sidebar.error(f"Error importing settings: {e}")
 
 if st.sidebar.button("Clear Imported Preset"):
-    st.session_state["imported_settings"] = None
-
-imported_settings = st.session_state["imported_settings"]
+    st.session_state.params = DEFAULTS.copy()
+    st.experimental_rerun()
 
 # --- SIDEBAR CONTROLS ---
 st.sidebar.header("1. Basic Parameters")
-duration_ms = st.sidebar.slider("Duration (ms)", 1, 200, DEFAULTS["duration_ms"])
-waveform = st.sidebar.selectbox("Waveform", ["Sine", "Square", "Sawtooth", "Triangle"], index=0)
-frequency = st.sidebar.slider("Base Frequency (Hz)", 50, 5000, DEFAULTS["frequency"])
-amplitude = st.sidebar.slider("Amplitude (0-1)", 0.0, 1.0, DEFAULTS["amplitude"], 0.05)
+duration_ms = st.sidebar.slider("Duration (ms)", 1, 200, 
+                                  value=st.session_state.params["duration_ms"], 
+                                  key="duration_ms")
+waveform_options = ["Sine", "Square", "Sawtooth", "Triangle"]
+waveform = st.sidebar.selectbox("Waveform", waveform_options,
+                                index=waveform_options.index(st.session_state.params["waveform"]),
+                                key="waveform")
+frequency = st.sidebar.slider("Base Frequency (Hz)", 50, 5000, 
+                               value=st.session_state.params["frequency"], 
+                               key="frequency")
+amplitude = st.sidebar.slider("Amplitude (0-1)", 0.0, 1.0, 
+                               value=st.session_state.params["amplitude"], 
+                               step=0.05, 
+                               key="amplitude")
 
 st.sidebar.header("2. Overtone")
-overtone_enabled = st.sidebar.checkbox("Enable Overtone", DEFAULTS["overtone_enabled"])
+overtone_enabled = st.sidebar.checkbox("Enable Overtone", 
+                                       value=st.session_state.params["overtone_enabled"], 
+                                       key="overtone_enabled")
 if overtone_enabled:
-    overtone_freq = st.sidebar.slider("Overtone Frequency (Hz)", 50, 8000, DEFAULTS["overtone_freq"])
-    overtone_amp = st.sidebar.slider("Overtone Amplitude (0-1)", 0.0, 1.0, DEFAULTS["overtone_amp"], 0.05)
+    overtone_freq = st.sidebar.slider("Overtone Frequency (Hz)", 50, 8000, 
+                                      value=st.session_state.params["overtone_freq"], 
+                                      key="overtone_freq")
+    overtone_amp = st.sidebar.slider("Overtone Amplitude (0-1)", 0.0, 1.0, 
+                                     value=st.session_state.params["overtone_amp"], 
+                                     step=0.05, 
+                                     key="overtone_amp")
 else:
-    overtone_freq = DEFAULTS["overtone_freq"]
-    overtone_amp = DEFAULTS["overtone_amp"]
+    overtone_freq = st.session_state.params["overtone_freq"]
+    overtone_amp = st.session_state.params["overtone_amp"]
 
 st.sidebar.header("3. Envelope (ADSR)")
-attack_ms = st.sidebar.slider("Attack (ms)", 0, 100, DEFAULTS["attack_ms"])
-decay_ms = st.sidebar.slider("Decay (ms)", 0, 200, DEFAULTS["decay_ms"])
-sustain_level = st.sidebar.slider("Sustain (0-1)", 0.0, 1.0, DEFAULTS["sustain_level"], 0.05)
-release_ms = st.sidebar.slider("Release (ms)", 0, 200, DEFAULTS["release_ms"])
+attack_ms = st.sidebar.slider("Attack (ms)", 0, 100, 
+                                value=st.session_state.params["attack_ms"], 
+                                key="attack_ms")
+decay_ms = st.sidebar.slider("Decay (ms)", 0, 200, 
+                               value=st.session_state.params["decay_ms"], 
+                               key="decay_ms")
+sustain_level = st.sidebar.slider("Sustain (0-1)", 0.0, 1.0, 
+                                  value=st.session_state.params["sustain_level"], 
+                                  step=0.05, 
+                                  key="sustain_level")
+release_ms = st.sidebar.slider("Release (ms)", 0, 200, 
+                                 value=st.session_state.params["release_ms"], 
+                                 key="release_ms")
 
 st.sidebar.header("4. Mechanical & Noise")
-mechanical_decay = st.sidebar.slider("Mechanical Decay", 0.0, 0.1, DEFAULTS["mechanical_decay"], 0.01)
-noise_amp = st.sidebar.slider("Noise Amplitude", 0.0, 0.01, DEFAULTS["noise_amp"], 0.001)
+mechanical_decay = st.sidebar.slider("Mechanical Decay", 0.0, 0.1, 
+                                       value=st.session_state.params["mechanical_decay"], 
+                                       step=0.01, 
+                                       key="mechanical_decay")
+noise_amp = st.sidebar.slider("Noise Amplitude", 0.0, 0.01, 
+                              value=st.session_state.params["noise_amp"], 
+                              step=0.001, 
+                              key="noise_amp")
 
 st.sidebar.header("5. Bitcrusher & Reverb")
-bitcrusher_enabled = st.sidebar.checkbox("Bitcrusher", DEFAULTS["bitcrusher_enabled"])
+bitcrusher_enabled = st.sidebar.checkbox("Bitcrusher", 
+                                         value=st.session_state.params["bitcrusher_enabled"], 
+                                         key="bitcrusher_enabled")
 if bitcrusher_enabled:
-    bit_depth = st.sidebar.slider("Bit Depth", 4, 16, DEFAULTS["bit_depth"])
+    bit_depth = st.sidebar.slider("Bit Depth", 4, 16, 
+                                  value=st.session_state.params["bit_depth"], 
+                                  key="bit_depth")
 else:
-    bit_depth = DEFAULTS["bit_depth"]
+    bit_depth = st.session_state.params["bit_depth"]
 
-reverb_enabled = st.sidebar.checkbox("Reverb", DEFAULTS["reverb_enabled"])
+reverb_enabled = st.sidebar.checkbox("Reverb", 
+                                     value=st.session_state.params["reverb_enabled"], 
+                                     key="reverb_enabled")
 if reverb_enabled:
-    reverb_decay = st.sidebar.slider("Reverb Decay (sec)", 0.1, 5.0, DEFAULTS["reverb_decay"], 0.1)
-    reverb_mix = st.sidebar.slider("Reverb Mix (0-1)", 0.0, 1.0, DEFAULTS["reverb_mix"], 0.05)
+    reverb_decay = st.sidebar.slider("Reverb Decay (sec)", 0.1, 5.0, 
+                                     value=st.session_state.params["reverb_decay"], 
+                                     step=0.1, 
+                                     key="reverb_decay")
+    reverb_mix = st.sidebar.slider("Reverb Mix (0-1)", 0.0, 1.0, 
+                                   value=st.session_state.params["reverb_mix"], 
+                                   step=0.05, 
+                                   key="reverb_mix")
 else:
-    reverb_decay = DEFAULTS["reverb_decay"]
-    reverb_mix = DEFAULTS["reverb_mix"]
+    reverb_decay = st.session_state.params["reverb_decay"]
+    reverb_mix = st.session_state.params["reverb_mix"]
 
 st.sidebar.header("6. Filter")
-filter_enabled = st.sidebar.checkbox("Enable Filter", DEFAULTS["filter_enabled"])
+filter_enabled = st.sidebar.checkbox("Enable Filter", 
+                                       value=st.session_state.params["filter_enabled"], 
+                                       key="filter_enabled")
 if filter_enabled:
-    filter_type = st.sidebar.selectbox("Filter Type", ["lowpass", "highpass", "bandpass"], index=0)
+    filter_type_options = ["lowpass", "highpass", "bandpass"]
+    filter_type = st.sidebar.selectbox("Filter Type", filter_type_options,
+                                       index=filter_type_options.index(st.session_state.params["filter_type"]),
+                                       key="filter_type")
     if filter_type == "bandpass":
-        filter_cutoff_low = st.sidebar.slider("Filter Low (Hz)", 50, 5000, DEFAULTS["filter_cutoff_low"], 50)
-        filter_cutoff_high = st.sidebar.slider("Filter High (Hz)", 100, 10000, DEFAULTS["filter_cutoff_high"], 50)
-        filter_cutoff_single = DEFAULTS["filter_cutoff_single"]
+        filter_cutoff_low = st.sidebar.slider("Filter Low (Hz)", 50, 5000, 
+                                              value=st.session_state.params["filter_cutoff_low"], 
+                                              step=50, 
+                                              key="filter_cutoff_low")
+        filter_cutoff_high = st.sidebar.slider("Filter High (Hz)", 100, 10000, 
+                                               value=st.session_state.params["filter_cutoff_high"], 
+                                               step=50, 
+                                               key="filter_cutoff_high")
+        filter_cutoff_single = st.session_state.params["filter_cutoff_single"]
     else:
-        filter_cutoff_single = st.sidebar.slider("Filter Cutoff (Hz)", 50, 10000, DEFAULTS["filter_cutoff_single"], 50)
-        filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
-        filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
+        filter_cutoff_single = st.sidebar.slider("Filter Cutoff (Hz)", 50, 10000, 
+                                                 value=st.session_state.params["filter_cutoff_single"], 
+                                                 step=50, 
+                                                 key="filter_cutoff_single")
+        filter_cutoff_low = st.session_state.params["filter_cutoff_low"]
+        filter_cutoff_high = st.session_state.params["filter_cutoff_high"]
 else:
-    filter_type = DEFAULTS["filter_type"]
-    filter_cutoff_single = DEFAULTS["filter_cutoff_single"]
-    filter_cutoff_low = DEFAULTS["filter_cutoff_low"]
-    filter_cutoff_high = DEFAULTS["filter_cutoff_high"]
+    filter_type = st.session_state.params["filter_type"]
+    filter_cutoff_single = st.session_state.params["filter_cutoff_single"]
+    filter_cutoff_low = st.session_state.params["filter_cutoff_low"]
+    filter_cutoff_high = st.session_state.params["filter_cutoff_high"]
 
-# Assemble current parameters from controls
+# Собираем текущие параметры из значений виджетов
 current_params = {
-    "duration_ms": duration_ms,
-    "waveform": waveform,
-    "frequency": frequency,
-    "amplitude": amplitude,
-    "overtone_enabled": overtone_enabled,
+    "duration_ms": st.session_state.duration_ms,
+    "waveform": st.session_state.waveform,
+    "frequency": st.session_state.frequency,
+    "amplitude": st.session_state.amplitude,
+    "overtone_enabled": st.session_state.overtone_enabled,
     "overtone_freq": overtone_freq,
     "overtone_amp": overtone_amp,
-
-    "attack_ms": attack_ms,
-    "decay_ms": decay_ms,
-    "sustain_level": sustain_level,
-    "release_ms": release_ms,
-
-    "mechanical_decay": mechanical_decay,
-    "noise_amp": noise_amp,
-
-    "bitcrusher_enabled": bitcrusher_enabled,
+    "attack_ms": st.session_state.attack_ms,
+    "decay_ms": st.session_state.decay_ms,
+    "sustain_level": st.session_state.sustain_level,
+    "release_ms": st.session_state.release_ms,
+    "mechanical_decay": st.session_state.mechanical_decay,
+    "noise_amp": st.session_state.noise_amp,
+    "bitcrusher_enabled": st.session_state.bitcrusher_enabled,
     "bit_depth": bit_depth,
-
-    "reverb_enabled": reverb_enabled,
+    "reverb_enabled": st.session_state.reverb_enabled,
     "reverb_decay": reverb_decay,
     "reverb_mix": reverb_mix,
-
     "filter_enabled": filter_enabled,
     "filter_type": filter_type,
     "filter_cutoff_low": filter_cutoff_low,
@@ -328,12 +372,10 @@ current_params = {
     "filter_cutoff_single": filter_cutoff_single,
 }
 
-# If imported settings exist, override current_params
-if imported_settings is not None:
-    current_params = imported_settings
-    st.sidebar.success("Imported settings applied!")
+# Обновляем st.session_state.params для синхронизации (если потребуется в дальнейшем)
+st.session_state.params.update(current_params)
 
-# Export current settings as JSON (download button)
+# Export текущих настроек как JSON (download button)
 st.sidebar.download_button("Export Settings (JSON) 📥",
                            data=json.dumps(current_params, indent=4),
                            file_name="click_settings.json",
